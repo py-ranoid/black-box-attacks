@@ -1,9 +1,11 @@
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-import os
 from tqdm import tqdm
 from torchvision import datasets, transforms
 import torch.nn.functional as F
@@ -17,7 +19,7 @@ else:
 
 # contains 60k images from the MNIST train dataset by pytorch
 train_dataset= datasets.MNIST(
-         "/home/hadrien/data/mnist",
+         "../data/mnist",
          train=True,
          download=True,
          transform=transforms.Compose(
@@ -26,7 +28,7 @@ train_dataset= datasets.MNIST(
      )
 
 valid_dataset= datasets.MNIST(
-         "/home/hadrien/data/mnist",
+         "../data/mnist",
          train=False,
          download=True,
          transform=transforms.Compose(
@@ -34,8 +36,8 @@ valid_dataset= datasets.MNIST(
          ),
      )
 
-train_dataloader= DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=8)
-valid_dataloader= DataLoader(valid_dataset, batch_size=64, shuffle=False, num_workers=8)
+train_dataloader= DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0)
+valid_dataloader= DataLoader(valid_dataset, batch_size=64, shuffle=False, num_workers=0)
 
 
 
@@ -98,9 +100,9 @@ def train_network(net, epochs,train_dataloader, valid_dataloader, optim, criteri
         if total_loss_valid/ nb_batch_valid < best_loss:
             print('best loss improove from {} to {} saving model'.format(best_loss,total_loss_valid/ nb_batch_valid ))
             best_loss= total_loss_valid/ nb_batch_valid
-            torch.save(net, './oracle.pth') #put as param
+            torch.save(net, '../models/oracle.pth') #put as param
 
-oracle= CNN('./oracle.pth')
+oracle= CNN('../models/oracle.pth')
 optim= torch.optim.Adam(oracle.parameters(), lr=0.001)
 criterion = nn.CrossEntropyLoss()
 train_network(oracle, 10, train_dataloader, valid_dataloader, optim, criterion)
