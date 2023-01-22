@@ -1,5 +1,4 @@
 import os
-
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import pandas as pd
 import numpy as np
@@ -17,35 +16,11 @@ if torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 
-# contains 60k images from the MNIST train dataset by pytorch
-train_dataset= datasets.MNIST(
-         "../data/mnist",
-         train=True,
-         download=True,
-         transform=transforms.Compose(
-             [ transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
-         ),
-     )
-
-valid_dataset= datasets.MNIST(
-         "../data/mnist",
-         train=False,
-         download=True,
-         transform=transforms.Compose(
-             [ transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
-         ),
-     )
-
-train_dataloader= DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0)
-valid_dataloader= DataLoader(valid_dataset, batch_size=64, shuffle=False, num_workers=0)
-
-
 
 
 class CNN(nn.Module):
-    def __init__(self, model_pth):
+    def __init__(self):
         super().__init__()
-        self.model_pth= model_pth
         self.conv_block= nn.Sequential(
             nn.Conv2d(1,32,2),
             nn.MaxPool2d(2),
@@ -66,7 +41,7 @@ class CNN(nn.Module):
 
 
 
-def train_network(net, epochs,train_dataloader, valid_dataloader, optim, criterion):
+def train_network(net, epochs,train_dataloader, valid_dataloader, optim, criterion, pth):
     nb_batch_train= len(train_dataloader)
     nb_batch_valid= len(valid_dataloader)
     best_loss= 1000000
@@ -100,10 +75,59 @@ def train_network(net, epochs,train_dataloader, valid_dataloader, optim, criteri
         if total_loss_valid/ nb_batch_valid < best_loss:
             print('best loss improove from {} to {} saving model'.format(best_loss,total_loss_valid/ nb_batch_valid ))
             best_loss= total_loss_valid/ nb_batch_valid
-            torch.save(net, '../models/oracle.pth') #put as param
+            torch.save(net, pth) #put as param
 
-oracle= CNN('../models/oracle.pth')
-optim= torch.optim.Adam(oracle.parameters(), lr=0.001)
-criterion = nn.CrossEntropyLoss()
-train_network(oracle, 10, train_dataloader, valid_dataloader, optim, criterion)
+def oracle_pred(net, dataloader, evaluate=False):
+    preds=[]
+    correct=0
+    total=0
+    with torch.no_grad():
+        for batch in dataloader:
+            feature, target= batch[0], batch[1]
+            feature.to(device)
+            target.to(device)
+            pred= net(feature)
+            _, predicted = torch.max(pred.data, 1)
+            preds.append(predicted)
+            if evaluate:
+                correct+= (predicted==target).sum().item()
+                total += target.size(0)
+    if evaluate:
+        print("accuracy: {}".format(correct/total))
+    return torch.cat(preds)
 
+if __name__=='__main__':
+    # contains 60k images from the MNIST train dataset by pytorch
+    train_dataset= datasets.MNIST(
+            "./data/mnist",
+            train=True,
+            download=True,
+            transform=transforms.Compose(
+                [ transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
+            ),
+        )
+
+    test_dataset= datasets.MNIST(
+            "./data/mnist",
+            train=False,
+            download=True,
+            transform=transforms.Compose(
+                [ transforms.ToTensor(), transforms.Normalize([0.5], [0.5])]
+            ),
+        )
+
+    train_dataset, valid_dataset= torch.utils.data.random_split(train_dataset, [50000,10000])
+
+    train_dataloader= DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=8)
+    valid_dataloader= DataLoader(valid_dataset, batch_size=64, shuffle=False, num_workers=8)
+
+
+    oracle= CNN()
+    optim= torch.optim.Adam(oracle.parameters(), lr=0.001)
+    criterion = nn.CrossEntropyLoss()
+    try:
+        oracle= torch.load('./models/oracle.pth')
+    except:
+        train_network(oracle, 10, train_dataloader, valid_dataloader, optim, criterion,'./oracle.pth')
+
+    p=oracle_pred(oracle, valid_dataloader)
