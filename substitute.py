@@ -70,11 +70,12 @@ def augment_dataset(attack_dataset, substitute, oracle, lmbd=.1):
 def substitute_training(attack_set, test_dataloader, oracle, lmbd=.1, lr=0.01, substitute_learning_iter=6, pth='./substitute.pth'):
     criterion = nn.CrossEntropyLoss()
     for _ in range(substitute_learning_iter):
-        attack_dataloader= DataLoader(attack_set, batch_size=64, shuffle=False)
+        attack_dataloader= DataLoader(attack_set, batch_size=64, shuffle=True)
         substitute= CNN()
         optim= torch.optim.SGD(substitute.parameters(), lr= lr, momentum=0.9)
         train_network(substitute, 10, attack_dataloader, test_dataloader, optim, criterion, pth)
         attack_set= augment_dataset(attack_set, substitute, oracle, lmbd)
+    return substitute
 
 attack_set_o, test_set= torch.utils.data.random_split(test_dataset, [150,9850],generator=torch.Generator().manual_seed(42))
 
@@ -85,6 +86,11 @@ attack_dataloader_o= DataLoader(attack_set_o,batch_size=64, shuffle=False)
 oracle_preds=oracle_pred(oracle, attack_dataloader_o)
 
 attack_set= LabeledAttackSet(attack_set_o, oracle_preds)
-test_dataloader= DataLoader(test_dataset,64,False)
+test_dataloader= DataLoader(test_set,64,False)
 
-substitute_training(attack_set, test_dataloader, oracle)
+substitute= substitute_training(attack_set, test_dataloader, oracle)
+
+print('oracle perf:')
+oracle_pred(oracle, test_dataloader, True)
+print('substitute perf:')
+oracle_pred(substitute, test_dataloader, True)
